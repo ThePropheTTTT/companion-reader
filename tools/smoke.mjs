@@ -26,7 +26,11 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 5178);
-const APP = `http://127.0.0.1:${PORT}/`;
+// 默认打本机的开发服务器；也可以直接打线上地址，用来验证**部署产物**本身：
+//   $env:APP_URL='https://theprophetttt.github.io/companion-reader/'; npm run smoke
+// 这一步很值：本地跑通 ≠ 部署上去能跑，子路径、HTTPS、真实 Service Worker
+// 这三件事只有打到线上才验得到。
+const APP = process.env.APP_URL || `http://127.0.0.1:${PORT}/`;
 const DBG_PORT = 9333;
 const HEADFUL = process.argv.includes('--headful');
 const KEEP = process.argv.includes('--keep');
@@ -202,6 +206,29 @@ async function waitBooted(cdp, ms = 8000) {
     await sleep(150);
   }
   return -1;
+}
+
+/**
+ * 等某个条件成立，而不是等固定毫秒数。
+ *
+ * 为什么必须这样：很多交互后面跟着一次**动态 import**（点「排版」要先把
+ * settings.js 取回来才建面板）。本机是零点几毫秒，线上可能就是几秒 ——
+ * 写死 `sleep(450)` 的断言在本机永远绿、打到线上就红，而红的是测试的耐心、
+ * 不是产品。第一次拿线上地址跑这套自检就栽在这里。
+ *
+ * @returns {Promise<boolean>} 是否在超时前成立
+ */
+async function waitFor(cdp, expr, ms = 8000, step = 150) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    try {
+      if (await cdp.eval(null, `return Boolean(${expr});`)) return true;
+    } catch {
+      /* 页面正在导航/重排，下一轮再试 */
+    }
+    await sleep(step);
+  }
+  return false;
 }
 
 /* ---------------------------- 断言 ---------------------------- */
@@ -686,7 +713,7 @@ try {
 
   console.log('\n== 面板 ==');
   await cdp.eval(null, `document.getElementById('btn-read-settings').click(); return true;`);
-  await sleep(450);
+  await waitFor(cdp, `document.querySelector('.sheet--settings')`, 12000);
   const settingsSheet = await cdp.eval(
     null,
     `const s = document.querySelector('.sheet');
@@ -706,11 +733,15 @@ try {
   info(`截图 → ${path.relative(ROOT, shot2)}`);
 
   // 改字号，看正文是不是真的变了（这一条防的正是"写进没人读的 CSS 变量"）
+  // ★ 面板没开出来时这里必须**报失败并继续**，不能让一个断言把后面几十项一起带走 ——
+  //   第一次拿线上地址跑的时候就是这样：滑块取不到 → 页面里抛异常 → 整个脚本中断在
+  //   23/76 项，后面五十多项连跑都没跑。
   const fontChanged = await cdp.eval(
     null,
     `const before = getComputedStyle(document.getElementById('page-body')).fontSize;
      const sliders = [...document.querySelectorAll('.sheet input[type=range]')];
      const first = sliders[0];
+     if (!first) return { before, after: before, setting: null, why: '面板里没有滑块' };
      first.value = String(Number(first.value) + 2);
      first.dispatchEvent(new Event('input', { bubbles: true }));
      first.dispatchEvent(new Event('change', { bubbles: true }));
@@ -718,14 +749,15 @@ try {
      const after = getComputedStyle(document.getElementById('page-body')).fontSize;
      return { before, after, setting: Number(first.value) };`
   );
-  check('拖动字号滑块正文真的变了', fontChanged.before !== fontChanged.after, `${fontChanged.before} → ${fontChanged.after}`);
+  check('拖动字号滑块正文真的变了', fontChanged.before !== fontChanged.after,
+    fontChanged.why ? fontChanged.why : `${fontChanged.before} → ${fontChanged.after}`);
 
   // 关掉面板
   await closeAllSheets(cdp);
   await sleep(400);
 
   await cdp.eval(null, `document.getElementById('btn-ai').click(); return true;`);
-  await sleep(450);
+  await waitFor(cdp, `document.querySelector('.sheet--ai')`, 12000);
   const aiSheet = await cdp.eval(
     null,
     `const s = [...document.querySelectorAll('.sheet')].pop();
@@ -751,7 +783,7 @@ try {
 
   console.log('\n== 批注 / 弹幕（未配密钥时不能崩） ==');
   await cdp.eval(null, `document.getElementById('btn-notes').click(); return true;`);
-  await sleep(600);
+  await waitFor(cdp, `document.querySelector('.sheet') || (document.getElementById('toasts').textContent || '').trim()`, 12000);
   const notesRes = await cdp.eval(
     null,
     `return {
@@ -805,7 +837,7 @@ try {
 
   console.log('\n== 书搭子 ==');
   await cdp.eval(null, `document.getElementById('btn-companion').click(); return true;`);
-  await sleep(700);
+  await waitFor(cdp, `document.querySelector('.sheet--chat')`, 12000);
   const chat = await cdp.eval(
     null,
     `const s = [...document.querySelectorAll('.sheet')].pop();
@@ -884,7 +916,7 @@ try {
   // iPad 上排版面板能不能滚到最底下那几组（字体/主题/锚点/行为）？
   // 面板内容比屏幕高，如果 sheet__body 不能滚，底下的选项就是点不到的。
   await cdp.eval(null, `document.getElementById('btn-read-settings').click(); return true;`);
-  await sleep(500);
+  await waitFor(cdp, `document.querySelector('.sheet--settings')`, 12000);
   const scrollable = await cdp.eval(
     null,
     `const s = [...document.querySelectorAll('.sheet')].pop();
@@ -979,7 +1011,7 @@ try {
 
     // 走真实 UI 路径填配置（而不是直接写库），这样表单本身也被测到
     await cdp.eval(null, `document.getElementById('btn-ai').click(); return true;`);
-    await sleep(600);
+  await waitFor(cdp, `document.querySelector('.sheet--ai')`, 12000);
     const filled = await cdp.eval(
       null,
       `const s = [...document.querySelectorAll('.sheet')].pop();
@@ -1043,7 +1075,7 @@ try {
     check('打开第一章之后批注被生成并画到了页上', notes.has > 0, `带批注的段落 ${notes.has} 个、页边标记 ${notes.pins} 个（${Date.now() - tNotes}ms）`);
 
     await cdp.eval(null, `document.getElementById('btn-notes').click(); return true;`);
-    await sleep(800);
+  await waitFor(cdp, `document.querySelector('.sheet') || (document.getElementById('toasts').textContent || '').trim()`, 12000);
     const panel = await cdp.eval(
       null,
       `const items = [...document.querySelectorAll('.note-item__text')].map(n => n.textContent.trim());
@@ -1143,7 +1175,7 @@ try {
 
     // 书搭子：流式 + 回复内容
     await cdp.eval(null, `document.getElementById('btn-companion').click(); return true;`);
-    await sleep(700);
+  await waitFor(cdp, `document.querySelector('.sheet--chat')`, 12000);
     const streamed = await cdp.eval(
       null,
       `const s = [...document.querySelectorAll('.sheet')].pop();
