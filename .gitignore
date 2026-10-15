@@ -1,0 +1,23 @@
+# 只把 site/ 当作要部署的东西，其余都是本机的开发痕迹
+
+# 自检截图（tools/smoke.mjs 产出；挑出来放进 README 的那几张在 docs/ 里，是要提交的）
+.shots/
+
+# 造的测试用书（tools/make-fixture.mjs 产出）
+.fixtures/
+
+# 假模型服务录下来的请求原文（tools/fake-ai.mjs 产出）
+# ★ 里面有完整的 prompt 与书的正文，绝不能提交
+.fake-ai/
+
+# 浏览器自检用的临时 profile（tools/smoke.mjs 会自己清，异常退出时会留下）
+.edge-profile*/
+.peidu-edge-profile*/
+
+# 参考项目（只读，用于设计参考，不进产品）
+_ref/
+
+# 我自己的提交信息草稿（用 git commit -F 时落下的）
+.commit-msg.txt
+
+node_modules/

@@ -1,0 +1,145 @@
+/* ============================================================
+   陪读 · 设计令牌
+   ------------------------------------------------------------
+   三个维度正交，别混：
+     [data-theme]   阅读主题（纸白/护眼/夜间）—— 影响正文纸面
+     [data-chrome]  外壳明暗（auto/light/dark）—— 影响工具栏与面板
+     [data-device]  排版档位（phone/tablet/desktop）—— 影响行宽与边距
+   前两者由用户选，第三者由 JS 按视口宽度与指针类型自动判定。
+   ============================================================ */
+
+:root {
+  /* ---- 纸面（阅读区）---- */
+  --paper: #fbfaf7;
+  --paper-edge: #f2efe8;
+  --ink: #26241f;
+  --ink-soft: #5d584e;
+  --ink-faint: #96907f;
+  --rule: #e3ded1;
+
+  /* 锚点（加粗落点）。用偏暖的重色而不是纯黑，避免一整页像打了马赛克 */
+  --anchor: #1b1915;
+  --anchor-bg: transparent;
+
+  /* ---- 品牌与语义色 ----
+     主色取「柿子红」，暖、有点市井气，配读书场景不冷不燥 */
+  --accent: #c4553c;
+  --accent-soft: #f6e3dd;
+  --accent-ink: #8c3624;
+
+  /* 批注（番茄式书评）——区别于主色，用青灰，像铅笔批注 */
+  --note: #3f6a63;
+  --note-soft: #e4efec;
+
+  /* 弹幕 */
+  --danmaku: #6b5b95;
+  --danmaku-soft: #ece8f5;
+
+  /* ---- 外壳 ---- */
+  --chrome: #f6f4ef;
+  --chrome-2: #ffffff;
+  --chrome-line: #e0dbd0;
+  --chrome-ink: #33302a;
+  --chrome-ink-soft: #6f6a5f;
+  --shadow-1: 0 1px 2px rgb(38 36 31 / 0.06), 0 1px 1px rgb(38 36 31 / 0.04);
+  --shadow-2: 0 4px 16px rgb(38 36 31 / 0.1), 0 1px 3px rgb(38 36 31 / 0.06);
+  --shadow-3: 0 12px 40px rgb(38 36 31 / 0.16), 0 2px 8px rgb(38 36 31 / 0.08);
+
+  /* ---- 排版 ---- */
+  --ui-font: -apple-system, BlinkMacSystemFont, 'SF Pro SC', 'PingFang SC',
+             'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  --read-font: 'Songti SC', 'Songti TC', 'SimSun', 'Noto Serif CJK SC',
+               'Source Han Serif SC', Georgia, serif;
+  --read-font-hei: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+                   system-ui, sans-serif;
+  --read-font-kai: 'Kaiti SC', 'STKaiti', KaiTi, 'Noto Serif CJK SC', serif;
+
+  --fs-read: 19px;      /* 正文字号，JS 可改 14~48 */
+  --lh-read: 1.85;      /* 正文行高，JS 可改 */
+  --para-gap: 0.85em;   /* 段距 */
+  --measure: 24;        /* 每行字数，JS 按设备档位改 */
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* 点按目标最小 44pt（iOS HIG） */
+  --tap: 44px;
+
+  --dur-fast: 120ms;
+  --dur: 220ms;
+  --dur-slow: 380ms;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ---- 阅读主题 ---- */
+[data-theme='sepia'] {
+  --paper: #f6ecd8;
+  --paper-edge: #efe2c9;
+  --ink: #3a3226;
+  --ink-soft: #6b5f4b;
+  --ink-faint: #a2957c;
+  --rule: #e0d2b6;
+  --anchor: #2b2418;
+}
+
+[data-theme='night'] {
+  --paper: #16181c;
+  --paper-edge: #1d2026;
+  --ink: #c9c6bd;
+  --ink-soft: #8e8b83;
+  --ink-faint: #66645e;
+  --rule: #2b2f36;
+  --anchor: #f0ece2;
+  --accent: #e0785e;
+  --accent-soft: #33231f;
+  --accent-ink: #f0a08c;
+  --note: #7fae9f;
+  --note-soft: #1e2b28;
+  --danmaku: #a99bd4;
+  --danmaku-soft: #262332;
+}
+
+/* ---- 外壳明暗 ---- */
+[data-chrome='dark'] {
+  --chrome: #1a1c20;
+  --chrome-2: #22252a;
+  --chrome-line: #30343b;
+  --chrome-ink: #e4e1d9;
+  --chrome-ink-soft: #9a968c;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 4px 16px rgb(0 0 0 / 0.5);
+  --shadow-3: 0 12px 40px rgb(0 0 0 / 0.6);
+}
+
+/* ---- 排版档位 ----
+   phone 是基准（--measure 由 JS 写 inline style，这里只兜底）*/
+[data-device='phone'] {
+  --measure: 24;
+  --page-pad-x: 20px;
+}
+[data-device='tablet'] {
+  --measure: 34;
+  --page-pad-x: 40px;
+}
+[data-device='desktop'] {
+  --measure: 36;
+  --page-pad-x: 48px;
+}
+
+/* 横屏矮视口（手机横躺、iPad 分屏）压缩纵向节奏 */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --lh-read: 1.7;
+    --para-gap: 0.6em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+  }
+}

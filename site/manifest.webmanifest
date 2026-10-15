@@ -1,0 +1,20 @@
+{
+  "name": "陪读 — 有人陪着读书",
+  "short_name": "陪读",
+  "description": "导入 EPUB，AI 在段落边上陪你叽叽喳喳。为看不进书的 ADHD 读者做的阅读器。",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#f6f4ef",
+  "theme_color": "#f6f4ef",
+  "categories": ["books", "education", "productivity"],
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

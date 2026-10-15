@@ -1,0 +1,23 @@
+{
+  "name": "companion-reader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "陪读 — 陪伴式阅读：有人陪着读书的 AI 阅读器（EPUB / 手机竖屏 / iPad / PWA）",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ThePropheTTTT/companion-reader.git"
+  },
+  "scripts": {
+    "dev": "node tools/dev-server.mjs",
+    "test": "node --test --experimental-test-isolation=none \"test/*.test.js\"",
+    "test:all": "node --test --experimental-test-isolation=none \"test/*.test.js\" \"test/*.spec.js\"",
+    "check": "node tools/check.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "fixtures": "node tools/make-fixture.mjs",
+    "fake-ai": "node tools/fake-ai.mjs",
+    "smoke": "node tools/smoke.mjs",
+    "verify": "node tools/check.mjs && node --test --experimental-test-isolation=none \"test/*.test.js\""
+  }
+}

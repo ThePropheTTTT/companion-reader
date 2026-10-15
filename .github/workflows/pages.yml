@@ -1,0 +1,49 @@
+name: 部署到 GitHub Pages
+
+# 这个项目没有构建步骤：site/ 目录就是产物。
+# 所以工作流只做一件事 —— 把 site/ 原样上传成 Pages artifact。
+#
+# 为什么值得配：原始需求是「想让 iOS 用，所以要 HTTPS」。
+# Pages 免费给 HTTPS，装到 iPhone 主屏之后 Service Worker 才能生效（离线可读）。
+# 路径全部是相对的，所以部署在 /companion-reader/ 这种子路径下也能正常工作。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同时只跑一个部署；新的推送取消进行中的那个
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 部署前先跑一遍自检：静态检查 + 单测。
+      # 让「部署成功」同时意味着「没把一打开就白屏的版本发出去」。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 静态自检 + 单测
+        run: npm run verify
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

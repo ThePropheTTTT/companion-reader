@@ -1,0 +1,235 @@
+/* ============================================================
+   陪读 · 书架
+   ============================================================ */
+
+.library {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px max(12px, env(safe-area-inset-left)) calc(28px + env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-right));
+}
+
+.library__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 4px 14px;
+  max-width: 46em;
+  margin-inline: auto;
+}
+
+.library__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.library__count {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: var(--chrome-ink-soft);
+}
+
+.library__add {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+
+.library__foot {
+  max-width: 46em;
+  margin: 22px auto 0;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--chrome-ink-soft);
+  opacity: 0.75;
+}
+
+/* ---- 列表 ---- */
+.booklist {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-width: 46em;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bookcard {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border-radius: var(--radius);
+  background: var(--chrome-2);
+  border: 1px solid var(--chrome-line);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .bookcard:hover {
+    box-shadow: var(--shadow-2);
+  }
+}
+
+.bookcard:active {
+  transform: scale(0.995);
+}
+
+.bookcard__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  /* 44pt 最小点按目标 */
+  min-height: var(--tap);
+  padding: 12px;
+  text-align: start;
+  color: inherit;
+}
+
+/* ---- 封面（或字面封面）---- */
+.bookcard__cover {
+  flex: 0 0 auto;
+  width: 58px;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.16);
+}
+
+.bookcard__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bookcard__cover--text {
+  font-family: var(--read-font);
+  font-size: 15px;
+  line-height: 1.25;
+  font-weight: 700;
+  text-align: center;
+  padding: 6px;
+  word-break: break-all;
+}
+
+/* ---- 信息区 ---- */
+.bookcard__info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 2px;
+}
+
+.bookcard__title {
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--chrome-ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.bookcard__author {
+  font-size: 13px;
+  color: var(--chrome-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookcard__meta {
+  font-size: 11.5px;
+  color: var(--chrome-ink-soft);
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.bookcard__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.bookcard__bar {
+  flex: 1 1 auto;
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--chrome-ink) 12%, transparent);
+  overflow: hidden;
+}
+
+.bookcard__bar > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width var(--dur) var(--ease);
+}
+
+.bookcard__pct {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.bookcard__more {
+  flex: 0 0 auto;
+  width: 40px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  color: var(--chrome-ink-soft);
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.bookcard__more:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--chrome-ink) 6%, transparent);
+}
+
+/* ---- 空状态 ---- */
+.empty__mark {
+  font-size: 44px;
+  line-height: 1;
+  margin-bottom: 14px;
+  opacity: 0.9;
+}
+
+.empty__hint {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  opacity: 0.72;
+}
+
+/* iPad 上封面可以大一点，信息不至于空荡 */
+@media (min-width: 768px) {
+  .bookcard__cover {
+    width: 68px;
+    height: 94px;
+  }
+  .bookcard__title {
+    font-size: 16.5px;
+  }
+}

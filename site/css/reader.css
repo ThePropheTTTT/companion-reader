@@ -1,0 +1,421 @@
+/* ============================================================
+   陪读 · 阅读器排版
+   ------------------------------------------------------------
+   翻页策略：整章渲染 → 测量 → 只保留当前页内容（见 core/paginate.js）。
+   这里定义「测量时必须已生效」的全部样式，因为加粗锚点会改变字宽，
+   先量后加粗会导致翻页后行数变化、末页被裁。
+   ============================================================ */
+
+/* ---- 布局变量：默认按手机竖屏 ---- */
+:root {
+  --side-rail: 0px;
+}
+
+[data-device='tablet'] {
+  --side-rail: 0px;
+}
+
+/* iPad 横屏 / 桌面：目录常驻侧栏，主区居中 */
+@media (min-width: 1000px) and (min-height: 620px) {
+  :root {
+    --side-rail: 264px;
+  }
+}
+
+/* ============================================================
+   阅读视图骨架
+   ============================================================ */
+
+.reader {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  overflow: hidden;
+}
+
+@media (min-width: 1000px) and (min-height: 620px) {
+  .reader {
+    grid-template-columns: var(--side-rail) 1fr;
+  }
+  /* 侧栏收起时把轨道宽度也让出来，正文才能真正居中 */
+  .reader:not(.has-rail) {
+    grid-template-columns: 0 1fr;
+  }
+}
+
+/* ---- 侧栏（目录 / 批注 / 设置）---- */
+.rail {
+  min-width: 0;
+  min-height: 0;
+  display: none;
+  flex-direction: column;
+  background: var(--chrome);
+  border-right: 1px solid var(--chrome-line);
+  overflow: hidden;
+}
+
+.reader.has-rail .rail {
+  display: flex;
+}
+
+.rail__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--chrome-line);
+}
+
+.rail__title {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--chrome-ink-soft);
+  padding-left: 6px;
+}
+
+.rail__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px;
+}
+
+/* 侧栏抽屉在窄屏是以浮层出现 */
+@media (max-width: 999px) {
+  .rail {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: min(84vw, 340px);
+    display: flex;
+    transform: translateX(-101%);
+    transition: transform var(--dur) var(--ease);
+    box-shadow: var(--shadow-3);
+    border-right: 1px solid var(--chrome-line);
+  }
+  .rail.is-open {
+    transform: translateX(0);
+  }
+}
+
+/* ============================================================
+   阅读纸面
+   ============================================================ */
+
+.pages {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.paper {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  background: var(--paper);
+  /* 纸面比外壳略亮一点，制造层次 */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 5%, transparent);
+  overflow: hidden;
+}
+
+/* 翻页时的横向衬垫：比纸面略暗，暗示「还有下一页」 */
+.paper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--ink) 4%, transparent) 0,
+    transparent 12px
+  );
+  opacity: 0.6;
+}
+
+.page-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; /* 别把外层壳拖走 */
+  scrollbar-width: none;
+}
+.page-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.page-body {
+  /* 行宽用 ch 控制才有意义：
+     手机竖屏 20~26 字、iPad 30~38 字，由 JS 写 --measure */
+  max-width: calc(var(--measure) * 1ch + var(--page-pad-x) * 2);
+  margin-inline: auto;
+  padding: 20px var(--page-pad-x) 28px;
+  /* 首尾留白让文字不贴边，但别浪费竖屏空间 */
+  /* ★ position:relative 不是为了定位，是为了分页测量：
+     static 元素不是 offsetParent，段落的 offsetParent 会直接跳到 #paper，
+     于是 measureBlocks 的 offsetParent 链里根本找不到这个容器
+     （写死一个已知值：实测 `.page-body` 是 static 时，整章 19 段全被记 0 高，
+     被当成一页装得下，页脚永远 1/1）。paginate.js 里有一条 parentElement
+     退路兜住这种情况，但让链本来就是对的更省事。 */
+  position: relative;
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .page-body {
+    padding-top: 12px;
+    padding-bottom: 16px;
+  }
+}
+
+/* ============================================================
+   正文
+   ============================================================ */
+
+.page-body {
+  font-family: var(--read-font);
+  font-size: var(--fs-read);
+  line-height: var(--lh-read);
+  color: var(--ink);
+  /* CJK 之间自动微调与西文的间距（Safari 16.4 支持） */
+  text-autospace: normal;
+  /* 合成加粗会破坏锚点间距补偿的测量，禁止 */
+  font-synthesis-weight: none;
+}
+
+[data-font='hei'] .page-body {
+  font-family: var(--read-font-hei);
+}
+[data-font='kai'] .page-body {
+  font-family: var(--read-font-kai);
+}
+
+/* 段落。margin 用 em 跟随字号缩放 */
+.page-body > p {
+  margin: 0 0 var(--para-gap);
+  /* 中文不需要两端对齐：CJK 等宽，左对齐反而更整齐；
+     且 justify 遇上锚点会导致字距被拉伸 */
+  text-align: start;
+  /* 中文可以在任意字间断行；西文长词兜底 */
+  word-break: normal;
+  overflow-wrap: anywhere;
+  hanging-punctuation: allow-end;
+}
+
+/* 段末不留白（避免分页时多算一段间距） */
+.page-body > p:last-child {
+  margin-bottom: 0;
+}
+
+/* 解不出图片时的占位。
+   为什么不干脆不渲染这个段落：段落下标 pi 是全书的坐标系（批注、阅读位置
+   都挂在上面），少一段会让后面所有 pi 错位。宁可留一个不占地方的记号。 */
+.page-body > p.para-img--missing {
+  margin: 0.4em 0;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 0.86em;
+  letter-spacing: 0.02em;
+}
+
+.para-img__ph {
+  display: inline-block;
+  padding: 2px 10px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-pill);
+}
+
+.page-body h1,
+.page-body h2,
+.page-body h3,
+.page-body h4 {
+  margin: 1.6em 0 0.7em;
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  /* 标题不能被分页切开，交给 JS 处理，这里只防视觉割裂 */
+  break-after: avoid;
+  hanging-punctuation: allow-end;
+}
+
+.page-body > :first-child {
+  margin-top: 0;
+}
+
+.page-body h1 {
+  font-size: 1.5em;
+}
+.page-body h2 {
+  font-size: 1.3em;
+}
+.page-body h3 {
+  font-size: 1.12em;
+}
+.page-body h4 {
+  font-size: 1em;
+  color: var(--ink-soft);
+}
+
+.page-body blockquote {
+  margin: 0 0 var(--para-gap);
+  padding-inline-start: 1em;
+  border-inline-start: 3px solid var(--rule);
+  color: var(--ink-soft);
+}
+
+.page-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1em auto;
+  border-radius: var(--radius-sm);
+}
+
+/* 章节首字下沉？不要 —— ADHD 阅读器里花哨排版是干扰项，克制 */
+
+/* ============================================================
+   锚点（中文语义小句加粗）
+   ------------------------------------------------------------
+   ★ 绝不要给 .anchor 加 display:inline-block 或 transform。
+     inline-block 会在元素两侧无条件制造断行机会，中文整段会被排乱。
+     锚点缩放方案已经因此判定为死路，不要再尝试。
+   ============================================================ */
+
+.anchor {
+  font-weight: 700;
+  color: var(--anchor);
+  /* 宋体合成加粗会让字宽膨胀约 2%，在行内累积错位；
+     这里用字距补偿把它吃掉。数值由 measureBoldInflation() 实测，
+     兜底用 -0.01em（负值 = 收紧），不同字体会略有差异。 */
+  letter-spacing: var(--anchor-ls-comp, -0.01em);
+}
+
+/* 行内不应被加粗打断的：标点、数字、西文单词（交给浏览器即可）*/
+.page-body[data-strength='0'] .anchor {
+  font-weight: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+/* ============================================================
+   翻页控件
+   ============================================================ */
+
+.pager {
+  position: absolute;
+  top: 50%;
+  z-index: 12;
+  width: var(--tap);
+  height: var(--tap);
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+  border-radius: var(--radius-pill);
+  color: var(--ink-faint);
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.pager--prev {
+  left: 4px;
+}
+.pager--next {
+  right: 4px;
+}
+
+/* 只在「有鼠标」或 iPad 横屏（空间充裕）时显示悬浮箭头；
+   手机上靠左右滑动 + 轻点两侧翻页，不占视觉 */
+@media (hover: hover) and (pointer: fine) {
+  .pages:hover .pager:not([disabled]) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (min-width: 1000px) and (min-height: 620px) {
+  .pager:not([disabled]) {
+    opacity: 0.5;
+    pointer-events: auto;
+  }
+  .pages:hover .pager:not([disabled]) {
+    opacity: 1;
+  }
+}
+
+.pager[disabled] {
+  opacity: 0;
+}
+
+/* ---- 页脚信息条 ---- */
+.pagefoot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px max(12px, var(--page-pad-x)) 8px;
+  background: var(--paper);
+  border-top: 1px solid var(--rule);
+  font-family: var(--ui-font);
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagefoot__chapter {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pagefoot__num {
+  flex: 0 0 auto;
+}
+
+/* 点按左右两侧翻页的透明热区（手机主要交互） */
+.tapzone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 22%;
+  z-index: 10;
+  border: 0;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+.tapzone--prev {
+  left: 0;
+}
+.tapzone--next {
+  right: 0;
+}
+
+/* 指针精细时不需要热区，反而会挡住选字 */
+@media (hover: hover) and (pointer: fine) {
+  .tapzone {
+    display: none;
+  }
+}
+
+/* ============================================================
+   正文内联元素（AI 层用，此处只定基调，细节见 notes.css）
+   ============================================================ */
+
+.page-body mark {
+  background: var(--accent-soft);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}

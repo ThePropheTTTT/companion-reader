@@ -1,0 +1,531 @@
+/* ============================================================
+   陪读 · 批注层
+   ------------------------------------------------------------
+   两块东西：
+     1) #note-layer —— 页边小圆点。挂在 .paper 下、和 .page-scroll 平级，
+        是纯粹的浮层，**不进入任何测量路径**（详见 notes-panel.js 顶部注释）。
+     2) .notes-sheet —— 本章批注面板，复用 dom.js 的 sheet() 外壳，
+        这里只负责内容排版。
+
+   颜色 / 圆角 / 时长一律取 tokens.css 的变量，不写死色值，
+   这样 sepia、暗色主题自动跟着走。
+   ============================================================ */
+
+/* ============================================================
+   1. 页边小圆点层
+   ============================================================ */
+
+.note-layer {
+  /* 铺满纸面，坐标系和 .page-body 一致；但因为是绝对定位的独立一层，
+     正文的行盒计算完全看不见它 —— 这就是「零布局影响」的关键。
+     前提：.paper 自己已经是 position:relative（reader.css 里定的），
+     所以这里不能再给 .page-body 或别的祖先加定位，否则段落的
+     offsetParent 会变，measureBlocks 的 offsetChain 会拿到非单调的 top。 */
+  position: absolute;
+  inset: 0;
+  z-index: 14; /* 要压过翻页热区 .tapzone(z-index:10)，否则点不到 */
+  pointer-events: none; /* 内层元素各自开，见下 */
+
+  /* 关掉时不透明 + 不接收事件；.is-on 才现形 */
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.note-layer.is-on {
+  opacity: 1;
+}
+
+.note-layer[aria-hidden='true'] {
+  visibility: hidden; /* 连带把里面的按钮移出键盘 Tab 序列 */
+}
+
+/* 圆点的「几何预算」，摆位时由 JS 读这个值（见 notes-panel.js 的 --note-pin-lift）：
+   圆心 = 段落右缘 + PIN_SHIFT，热区 = 以圆心为中心的正方形 */
+.note-pin {
+  --note-dot: 10px; /* 可见的小圆点直径 */
+  --note-shift: 20px; /* 圆心离正文框右缘的距离：3~22px 是文字, 之后才是页边 */
+  --note-pin-lift: calc(var(--tap) / 2 - var(--note-shift));
+
+  position: absolute;
+  width: var(--tap); /* 44px，iOS HIG 触控下限 */
+  height: var(--tap);
+  /* JS 给的 left 是段落的右缘坐标，所以再往左退一整个热区宽，
+     圆心才会落在 left + --note-shift 上 */
+  margin-left: calc(-1 * var(--tap));
+  margin-top: var(--note-pin-lift);
+
+  padding: 0;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  pointer-events: auto; /* 父层是 none，这里单独打开 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 可见的圆点本体 */
+.note-pin::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--note-dot);
+  height: var(--note-dot);
+  margin: calc(var(--note-dot) / -2) 0 0 calc(var(--note-dot) / -2);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--note) 55%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--paper) 70%, transparent);
+  transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.note-pin:hover::before,
+.note-pin:focus-visible::before {
+  background: var(--note);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--note-soft) 80%, transparent);
+}
+
+/* 一条批注是点，多条批注显示数字（堆一串点看不出有几条） */
+.note-pin__num {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  border-radius: var(--radius-pill);
+  background: var(--note);
+  color: var(--paper);
+  font-family: var(--ui-font);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 17px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--paper) 70%, transparent);
+}
+
+.note-layer:not(.is-on) .note-pin {
+  display: none;
+}
+
+/* ============================================================
+   2. 段落上的「有批注」标记
+   ------------------------------------------------------------
+   ★★ 只画在段落**自身盒内已有的空白**里，一个像素都不改布局 ★★
+   绝对不能用：段内插节点、零宽字符、::after 生成字形、border、padding、
+   margin、outline、transform —— 前几种会改行盒（中文断行点跟着变，
+   段落高度跟着变，分页当场作废），后几种会改段落盒尺寸或制造
+   新的滚动/溢出。这里只用 background（画在 padding 区，纯装饰，
+   不参与布局、不影响断行、不产生滚动），以及 color（不改字宽）。
+   ============================================================ */
+
+.page-body .has-note {
+  /* 左侧一道细批注色 + 极淡的底色：靠色相区分，不靠位移 */
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--note) 70%, transparent) 0,
+    color-mix(in srgb, var(--note) 70%, transparent) 3px,
+    transparent 3px
+  );
+  background-repeat: no-repeat;
+  background-position: 0 0.15em;
+  background-size: 100% calc(100% - 0.3em);
+  background-color: color-mix(in srgb, var(--note-soft) 34%, transparent);
+}
+
+/* 暗色主题下底色要压得更淡，否则一整段发灰 */
+[data-theme='dark'] .page-body .has-note {
+  background-color: color-mix(in srgb, var(--note) 8%, transparent);
+}
+
+/* ============================================================
+   3. 批注小卡（点页边圆点 / 长按段落弹出来的那条）
+   ============================================================ */
+
+.note-card {
+  position: absolute;
+  max-width: min(78vw, 280px);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--chrome-2);
+  color: var(--chrome-ink);
+  box-shadow: var(--shadow-3);
+  pointer-events: auto; /* 只有卡片自己可点，其余页边仍然穿透给翻页热区 */
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.note-card.is-open {
+  opacity: 1;
+}
+
+.note-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.note-card__text {
+  margin: 0;
+  font-family: var(--ui-font);
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--chrome-ink);
+}
+
+.note-card__likes {
+  font-family: var(--ui-font);
+  font-size: 11px;
+  color: var(--chrome-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   4. 类型标签（吐槽 / 笔记 / 问题 / 无剧透梗概）
+   ------------------------------------------------------------
+   吐槽 = 品牌主色（热闹一点），笔记 = 批注青灰，问题 = 弹幕紫，
+   梗概 = 中性灰。四种都从 tokens.css 派生，不新增色板。
+   ============================================================ */
+
+.note-kind {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.note-kind--quip {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.note-kind--note {
+  background: var(--note-soft);
+  color: var(--note);
+}
+
+.note-kind--ask {
+  background: var(--danmaku-soft);
+  color: var(--danmaku);
+}
+
+.note-kind--sum {
+  background: color-mix(in srgb, var(--chrome-ink) 8%, transparent);
+  color: var(--chrome-ink-soft);
+}
+
+[data-theme='dark'] .note-kind--note {
+  color: color-mix(in srgb, var(--note) 78%, var(--chrome-ink));
+}
+
+/* 卡片左侧用类型色点一下，扫一眼就知道这条是什么 */
+.note-card--quip {
+  border-left: 3px solid var(--accent);
+}
+.note-card--note {
+  border-left: 3px solid var(--note);
+}
+.note-card--ask {
+  border-left: 3px solid var(--danmaku);
+}
+.note-card--sum {
+  border-left: 3px solid var(--ink-faint);
+}
+
+/* ============================================================
+   5. 本章批注面板（.notes-sheet 是传给 sheet() 的 className）
+   ============================================================ */
+
+.notes-sheet .sheet__body {
+  padding: 0;
+}
+
+.notes-panel {
+  padding: 4px 16px 24px;
+}
+
+/* ---- 头部 ---- */
+.notes-head {
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--chrome-line);
+}
+
+.notes-head__title {
+  margin: 0;
+  font-family: var(--ui-font);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--chrome-ink);
+}
+
+.notes-head__meta {
+  margin: 3px 0 0;
+  font-family: var(--ui-font);
+  font-size: 12.5px;
+  color: var(--chrome-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 小标题 ---- */
+.notes-h {
+  margin: 16px 0 8px;
+  font-family: var(--ui-font);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--chrome-ink-soft);
+}
+
+/* ---- 摘要 ---- */
+.notes-summary {
+  margin-top: 4px;
+}
+
+.notes-summary__text {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--note-soft);
+  color: var(--chrome-ink);
+  font-family: var(--ui-font);
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+
+[data-theme='dark'] .notes-summary__text {
+  background: color-mix(in srgb, var(--note) 12%, transparent);
+}
+
+/* ---- 人物 ---- */
+.notes-chars__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.notes-char {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--chrome-ink) 7%, transparent);
+  color: var(--chrome-ink);
+  font-family: var(--ui-font);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* ---- 批注列表 ---- */
+.notes-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-item {
+  display: block;
+  width: 100%;
+  /* 触控目标下限：卡片本身通常比 44px 高，小屏也不硬撑 */
+  min-height: var(--tap);
+  margin: 0 0 8px;
+  padding: 11px 12px;
+  border: 1px solid var(--chrome-line);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.note-item:hover {
+  background: color-mix(in srgb, var(--chrome-ink) 4%, transparent);
+}
+
+.note-item:focus-visible {
+  outline: 2px solid var(--note);
+  outline-offset: 1px;
+}
+
+.note-item--quip {
+  border-left-color: var(--accent);
+}
+.note-item--note {
+  border-left-color: var(--note);
+}
+.note-item--ask {
+  border-left-color: var(--danmaku);
+}
+.note-item--sum {
+  border-left-color: var(--ink-faint);
+}
+
+.note-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.note-item__pi,
+.note-item__page {
+  font-family: var(--ui-font);
+  font-size: 11.5px;
+  color: var(--chrome-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 页码推到右边，扫视「这条在哪」更省力 */
+.note-item__page {
+  margin-left: auto;
+}
+
+/* 原文摘录：用引用竖线，和正文里的 blockquote 呼应 */
+.note-item__quote {
+  margin: 0 0 5px;
+  padding-inline-start: 8px;
+  border-inline-start: 2px solid var(--chrome-line);
+  font-family: var(--ui-font);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--chrome-ink-soft);
+}
+
+.note-item__quote--none {
+  border-inline-start-color: transparent;
+  padding-inline-start: 0;
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.note-item__text {
+  margin: 0;
+  font-family: var(--ui-font);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--chrome-ink);
+}
+
+.note-item__likes {
+  display: inline-block;
+  margin-top: 5px;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  color: var(--chrome-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 列表底部提示 ---- */
+.notes-hint {
+  margin: 10px 2px 0;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--chrome-ink-soft);
+}
+
+/* ---- 空态：给下一步，不留白 ---- */
+.notes-empty {
+  margin-top: 18px;
+  padding: 20px 16px;
+  border: 1px dashed var(--chrome-line);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.notes-empty__title {
+  margin: 0 0 6px;
+  font-family: var(--ui-font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--chrome-ink);
+}
+
+.notes-empty__body {
+  margin: 0 auto;
+  max-width: 30ch;
+  font-family: var(--ui-font);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--chrome-ink-soft);
+}
+
+/* ============================================================
+   6. 屏幕档位
+   ------------------------------------------------------------
+   375px（iPhone 竖屏）→ 1024px（iPad 横屏）都要好看。
+   窄屏页边只有 20px，所以圆点要往正文这边挪一点，别被裁掉。
+   ============================================================ */
+
+@media (max-width: 420px) {
+  .note-pin {
+    --note-shift: 14px;
+  }
+
+  .note-card {
+    max-width: min(86vw, 260px);
+    padding: 9px 11px;
+  }
+
+  .notes-panel {
+    padding: 2px 13px 20px;
+  }
+}
+
+/* 平板：面板已经是侧栏（sheet--right，420px），内容可以松一点 */
+@media (min-width: 768px) {
+  .notes-panel {
+    padding: 6px 20px 28px;
+  }
+
+  .note-card {
+    max-width: 300px;
+  }
+}
+
+/* 极窄（分屏 / 小折叠屏）：页边实在太窄，把圆点压到正文框边上，
+   宁可贴着字也别溢出纸面 —— 触控目标仍然是 44px 不缩水 */
+@media (max-width: 340px) {
+  .note-pin {
+    --note-shift: 8px;
+  }
+}
+
+/* ============================================================
+   7. 降低动态效果
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .note-layer,
+  .note-pin::before,
+  .note-card,
+  .note-item {
+    transition-duration: 1ms;
+  }
+}
+
+/* ============================================================
+   8. 打印：页边圆点和浮层都是屏幕上的东西，别印到纸上
+   ============================================================ */
+
+@media print {
+  .note-layer,
+  .note-card,
+  .notes-sheet {
+    display: none !important;
+  }
+
+  .page-body .has-note {
+    background: none;
+  }
+}

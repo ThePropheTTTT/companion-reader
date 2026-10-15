@@ -1,0 +1,383 @@
+/* ============================================================
+   陪读 · 基础重置 + 外壳骨架
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* iOS 上禁止双击缩放抖动，但保留用户手动缩放（可访问性） */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  /* 100dvh：iOS 地址栏伸缩时不会像 100vh 那样抖动/溢出 */
+  min-height: 100dvh;
+  font-family: var(--ui-font);
+  color: var(--chrome-ink);
+  background: var(--chrome);
+  -webkit-font-smoothing: antialiased;
+  /* 防止阅读区滚动到尽头时的橡皮筋把外壳一起拖走 */
+  overscroll-behavior: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  /* iOS 上点按不高亮灰块 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 键盘可达性：只在键盘导航时显示焦点环 */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* 屏幕阅读器专用 */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ============================================================
+   应用骨架
+   ============================================================ */
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  /* 安全区：iPhone 刘海/home 指示条、iPad 圆角。横屏 iPad 左右也要吃 */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0
+    env(safe-area-inset-left);
+}
+
+/* ---- 顶栏 ---- */
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 4px 8px;
+  background: var(--chrome);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur) var(--ease);
+}
+
+.topbar.is-scrolled {
+  border-bottom-color: var(--chrome-line);
+}
+
+.topbar__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  /* 长书名两行截断 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.topbar__sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--chrome-ink-soft);
+  margin-top: 1px;
+}
+
+.iconbtn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  color: var(--chrome-ink-soft);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.iconbtn:hover {
+  background: color-mix(in srgb, var(--chrome-ink) 7%, transparent);
+  color: var(--chrome-ink);
+}
+
+.iconbtn[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.iconbtn__label {
+  font-size: 13px;
+}
+
+@media (max-width: 400px) {
+  /* 窄屏优先保住书名，图标按钮的文字标签藏起来 */
+  .iconbtn__label {
+    display: none;
+  }
+}
+
+/* ---- 主区 ---- */
+.main {
+  flex: 1 1 auto;
+  min-height: 0; /* flex 子项默认 min-height:auto 会撑破容器，必须显式归零 */
+  position: relative;
+  display: flex;
+  background: var(--chrome);
+}
+
+.view {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 底栏 ---- */
+.bottombar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: calc(var(--tap) + env(safe-area-inset-bottom));
+  padding: 0 8px env(safe-area-inset-bottom);
+  background: var(--chrome);
+  border-top: 1px solid var(--chrome-line);
+}
+
+/* 底部主按钮（书搭子）单独强调 */
+.bottombar__primary {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--tap);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  transition: filter var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.bottombar__primary:active {
+  transform: scale(0.97);
+  filter: brightness(0.94);
+}
+
+.bottombar__primary[disabled] {
+  background: color-mix(in srgb, var(--chrome-ink) 12%, transparent);
+  color: var(--chrome-ink-soft);
+  cursor: default;
+}
+
+/* ---- 通用 ---- */
+.progressbar {
+  flex: 0 0 auto;
+  height: 3px;
+  background: color-mix(in srgb, var(--chrome-ink) 10%, transparent);
+  overflow: hidden;
+}
+
+.progressbar__fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width var(--dur) var(--ease);
+}
+
+.card {
+  background: var(--chrome-2);
+  border: 1px solid var(--chrome-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+
+.empty {
+  margin: auto;
+  padding: 32px 24px;
+  max-width: 34em;
+  text-align: center;
+  color: var(--chrome-ink-soft);
+}
+
+.empty__title {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--chrome-ink);
+}
+
+.empty__body {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow-1);
+  transition: filter var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--chrome-ink);
+  border: 1px solid var(--chrome-line);
+  box-shadow: none;
+}
+
+.btn--danger {
+  background: #b8452f;
+}
+
+/* ---- 拖放导入 ---- */
+.dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 12%, var(--chrome));
+  border: 3px dashed var(--accent);
+  border-radius: var(--radius-lg);
+  margin: 12px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  pointer-events: none;
+}
+
+/* ---- 吐司 ---- */
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  width: max-content;
+  max-width: min(92vw, 30em);
+  pointer-events: none;
+}
+
+.toast {
+  padding: 10px 16px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--chrome-ink) 88%, transparent);
+  color: var(--chrome);
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: center;
+  box-shadow: var(--shadow-2);
+  animation: toast-in var(--dur) var(--ease);
+}
+
+.toast--err {
+  background: #a33a26;
+  color: #fff;
+}
+
+/* 重复出现时重放一次"弹入"，让用户知道"又是这句话"（而不是以为没点上） */
+.toast--pop {
+  animation: toast-in var(--dur) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast--pop {
+    animation: none;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+
+/* ============================================================
+   响应式：iPad / 桌面
+   ============================================================ */
+
+/* iPad 竖屏及以上：外壳允许更宽的阅读区，并给侧栏留位 */
+@media (min-width: 768px) {
+  .main {
+    justify-content: center;
+  }
+}
+
+/* 桌面宽屏：顶栏/底栏不再是唯一入口，内容居中收窄 */
+@media (min-width: 1024px) {
+  .topbar,
+  .bottombar {
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+  }
+}
+
+/* 指针是鼠标时不依赖 hover 显隐，但也没必要放大点击区 */
+@media (hover: hover) and (pointer: fine) {
+  .iconbtn:hover {
+    background: color-mix(in srgb, var(--chrome-ink) 7%, transparent);
+  }
+}

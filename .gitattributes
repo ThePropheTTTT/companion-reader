@@ -1,0 +1,11 @@
+# 这个项目要部署到 Linux 静态托管上，仓库里统一存 LF。
+# 不加这一行的话，Windows 上 checkout 会把每个文件改成 CRLF，
+# 于是「只改了一行」的提交会显示成整个文件都变了。
+* text=auto eol=lf
+
+# 二进制：别动
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

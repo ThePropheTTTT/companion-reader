@@ -1,0 +1,168 @@
+/* ============================================================
+   陪读 · 弹幕层样式
+   ------------------------------------------------------------
+   三条不能破的规矩，写在最前面：
+
+   1. **这一层必须是 pointer-events:none 的整层。**
+      它盖在正文上方，如果自己能接收指针事件，选字、长按、点按翻页
+      全都会被它吃掉。层内也不许放任何可点/可聚焦的元素。
+
+   2. **绝不给这一层里的东西加 margin / padding 影响布局的属性。**
+      虽然它挂在 #paper 上（在测量容器的外面），但一旦有人以后把挂载点
+      挪进 .page-body，这些属性立刻会开始改变分页。写成绝对定位 +
+      只用 transform 做位移，是为了让「挪进去也不会坏」也成立。
+
+   3. **字要压得住正文，但不能像广告。**
+      正文是 #26241f 的墨色，弹幕用 --danmaku（纸白主题下是灰紫 #6b5b95），
+      比正文浅一档、比批注（--note 竹青）更「轻」。深色主题下 tokens.css
+      会把它换成亮紫，不需要在这里再写一套。
+
+   字号取 .78rem 而不是固定 px：正文大小随用户设置变，弹幕也要跟着变，
+   否则把字调到 28px 时弹幕会小到看不见。
+   ============================================================ */
+
+.danmaku-layer {
+  position: absolute;
+  inset: 0;
+  /* 层级关系是精确的一座塔，动之前先看这行：
+       .page-scroll (0) < .danmaku-layer (11) < .tapzone (10 不行) …
+     实际取值：.tapzone 是 10，.pager 是 12，#note-layer 是 14。
+     弹幕要盖住正文、但不该盖住页边的批注圆点（那个要点得到），
+     所以落在 10 和 14 之间；它自己 pointer-events:none，不挡任何点击。 */
+  z-index: 11;
+  overflow: hidden;
+  pointer-events: none;
+  /* 默认整层不可见；打开时淡入，避免按钮一按「啪」地冒出一堆字 */
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+  /* 轨道几何：JS 只改这两个值（见 ui/danmaku.js 的 measureLanes） */
+  --dm-lane: 30px;
+  --dm-top: 8px;
+  contain: layout paint;
+}
+
+.danmaku-layer.is-on {
+  opacity: 1;
+}
+
+/* 一条弹幕 */
+.dm {
+  position: absolute;
+  left: 0;
+  /* 默认贴着顶部留白；真实值由 JS 按轨道写成 inline top */
+  top: var(--dm-top, 8px);
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  font-weight: 500;
+  color: var(--danmaku);
+  /* 描边式光晕：纸面是浅色底，但正文的锚点是加粗的黑字，
+     弹幕压过去的时候没有这层白边会糊在一起读不清。
+     用多重 text-shadow 而不是背景块 —— 背景块会像标签，太抢眼。 */
+  text-shadow:
+    0 0 3px var(--paper),
+    0 0 3px var(--paper),
+    0 0 6px var(--paper),
+    0 1px 0 var(--paper);
+  will-change: transform;
+  transform: translateX(var(--dm-from, 100%));
+  /* 生成过场时不要有过渡，位移由动画负责 */
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 正常滚动 */
+.dm--run {
+  animation: dm-scroll var(--dm-dur, 8000ms) linear forwards;
+}
+
+@keyframes dm-scroll {
+  from {
+    transform: translateX(var(--dm-from, 100%));
+  }
+  to {
+    transform: translateX(var(--dm-to, -100%));
+  }
+}
+
+/* 减少动态：原地淡入淡出，不做横向位移。
+   这不是「低配版」—— 前庭敏感的用户看横向移动的字会真的不适。 */
+.dm--static {
+  transform: none;
+  animation: dm-fade 3200ms ease-in-out forwards;
+}
+
+@keyframes dm-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  14% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ---------------------------- 按 kind 的风格 ---------------------------- */
+
+/* 吐槽 / 觉得好笑：稍大一点点，像是笑出声 */
+.dm--laugh {
+  font-weight: 600;
+}
+
+/* 真好奇：带一层极淡的底色，和「陈述」区分开 */
+.dm--ask {
+  padding: 0 3px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--danmaku-soft) 78%, transparent);
+}
+
+/* 提醒注意某个细节：左侧一道细线，像批注的余韵 */
+.dm--warn {
+  border-left: 2px solid var(--danmaku);
+  padding-left: 5px;
+}
+
+/* 被一句击中：字距拉开一点，读起来会慢半拍 */
+.dm--awe {
+  letter-spacing: 0.06em;
+}
+
+/* ---------------------------- 深色主题微调 ---------------------------- */
+
+/* 夜间主题下纸面本身就是暗的，白边光晕要换成「暗边」，
+   否则文字周围会有一圈脏白。 */
+[data-theme='night'] .dm,
+[data-theme='ink'] .dm {
+  text-shadow:
+    0 0 3px rgba(0, 0, 0, 0.75),
+    0 0 6px rgba(0, 0, 0, 0.5);
+}
+
+/* 亮度调节：纸面被压暗时弹幕也别太亮 */
+[data-theme='night'] .danmaku-layer {
+  filter: brightness(var(--brightness, 1));
+}
+
+/* ---------------------------- 减少动效（全局兜底） ---------------------------- */
+
+/* ui/danmaku.js 已经在 JS 侧判过一次 prefers-reduced-motion，
+   这里再兜一次是为了「动画被打断」的情况：比如用户在系统里中途
+   打开了「减弱动态效果」，CSS 媒体查询会立刻生效，不用刷新页面。 */
+@media (prefers-reduced-motion: reduce) {
+  .dm--run {
+    animation: dm-fade 3200ms ease-in-out forwards;
+  }
+  .danmaku-layer {
+    transition: none;
+  }
+}
