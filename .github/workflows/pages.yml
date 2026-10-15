@@ -39,7 +39,13 @@ jobs:
       - name: 静态自检 + 单测
         run: npm run verify
 
+      # enablement: true 让这个 action 在 Pages 还没开时自己去开。
+      # 不加这一行的话，第一次运行会挂在「Get Pages site failed」上 ——
+      # 我自己第一次跑就是这么失败的（仓库刚建、Pages 还没启用）。
+      # 对别人 fork 这个仓库也一样：不开这个开关，他们就得多手动一步。
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
